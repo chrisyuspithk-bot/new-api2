@@ -33,7 +33,11 @@ func ListResellers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, users)
+	views := make([]resellerCustomerView, 0, len(users))
+	for _, user := range users {
+		views = append(views, newResellerCustomerView(user))
+	}
+	common.ApiSuccess(c, views)
 }
 
 // GetResellerPolicies returns a reseller's models and base price factors. Admin only.
@@ -271,6 +275,20 @@ func GetOwnCustomerTopUps(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
+// resellerCustomerView is the only customer shape a reseller may see. It is an allowlist so new
+// User fields (password hash, verification codes, settings) cannot leak by default.
+type resellerCustomerView struct {
+	Id          int    `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Status      int    `json:"status"`
+	Quota       int    `json:"quota"`
+	UsedQuota   int    `json:"used_quota"`
+	Group       string `json:"group"`
+	ResellerId  int    `json:"reseller_id"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
 // GetOwnCustomers lists the customers owned by the authenticated reseller.
 func GetOwnCustomers(c *gin.Context) {
 	customers, err := model.ListResellerCustomers(c.GetInt("id"))
@@ -278,7 +296,25 @@ func GetOwnCustomers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, customers)
+	views := make([]resellerCustomerView, 0, len(customers))
+	for _, customer := range customers {
+		views = append(views, newResellerCustomerView(customer))
+	}
+	common.ApiSuccess(c, views)
+}
+
+func newResellerCustomerView(user model.User) resellerCustomerView {
+	return resellerCustomerView{
+		Id:          user.Id,
+		Username:    user.Username,
+		DisplayName: user.DisplayName,
+		Status:      user.Status,
+		Quota:       user.Quota,
+		UsedQuota:   user.UsedQuota,
+		Group:       user.Group,
+		ResellerId:  user.ResellerId,
+		CreatedAt:   user.CreatedAt,
+	}
 }
 
 // GetOwnCustomerModels returns a customer's granted models, only for an owned customer.

@@ -130,6 +130,35 @@ func TestResellerTopUpHistoryIsScopedToOwnCustomers(t *testing.T) {
 	assert.Equal(t, customerA.Id, body.Data.Items[0].UserId)
 }
 
+func TestResellerCustomerListOmitsSensitiveUserFields(t *testing.T) {
+	setupSecurityEnrollmentTest(t)
+	reseller := createResellerTestUser(t, "reseller-leak", common.RoleReseller, 0)
+	customer := createResellerTestUser(t, "customer-leak", common.RoleCommonUser, reseller.Id)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", customer.Id).Update("password", "hash-secret").Error)
+
+	response := resellerRequest(t, http.MethodGet, "", reseller.Id, nil, GetOwnCustomers)
+
+	require.Equal(t, http.StatusOK, response.Code)
+	body := response.Body.String()
+	assert.Contains(t, body, `"username":"customer-leak"`)
+	assert.NotContains(t, body, "hash-secret")
+	assert.NotContains(t, body, `"password"`)
+}
+
+func TestAdminResellerListOmitsPasswordHash(t *testing.T) {
+	setupSecurityEnrollmentTest(t)
+	reseller := createResellerTestUser(t, "admin-list-reseller", common.RoleReseller, 0)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", reseller.Id).Update("password", "hash-secret").Error)
+
+	response := resellerRequest(t, http.MethodGet, "", reseller.Id, nil, ListResellers)
+
+	require.Equal(t, http.StatusOK, response.Code)
+	body := response.Body.String()
+	assert.Contains(t, body, `"username":"admin-list-reseller"`)
+	assert.NotContains(t, body, "hash-secret")
+	assert.NotContains(t, body, `"password"`)
+}
+
 func TestResellerCreditsOwnCustomerThroughHandler(t *testing.T) {
 	setupSecurityEnrollmentTest(t)
 	reseller := createResellerTestUser(t, "reseller-credit-own", common.RoleReseller, 0)
